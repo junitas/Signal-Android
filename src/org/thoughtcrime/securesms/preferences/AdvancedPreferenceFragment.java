@@ -18,6 +18,7 @@ import android.widget.Toast;
 
 import com.afollestad.materialdialogs.AlertDialogWrapper;
 import com.google.android.gms.gcm.GoogleCloudMessaging;
+import com.google.protobuf.ByteString;
 
 import org.thoughtcrime.securesms.ApplicationPreferencesActivity;
 import org.thoughtcrime.securesms.LogSubmitActivity;
@@ -26,14 +27,25 @@ import org.thoughtcrime.securesms.RegistrationActivity;
 import org.thoughtcrime.securesms.contacts.ContactAccessor;
 import org.thoughtcrime.securesms.contacts.ContactIdentityManager;
 import org.thoughtcrime.securesms.crypto.MasterSecret;
+import org.thoughtcrime.securesms.database.DatabaseFactory;
+import org.thoughtcrime.securesms.database.GroupDatabase;
+import org.thoughtcrime.securesms.database.GroupDatabase.Reader;
+import org.thoughtcrime.securesms.database.ThreadDatabase;
+import org.thoughtcrime.securesms.mms.OutgoingGroupMediaMessage;
 import org.thoughtcrime.securesms.push.TextSecureCommunicationFactory;
+import org.thoughtcrime.securesms.recipients.Recipients;
+import org.thoughtcrime.securesms.sms.MessageSender;
 import org.thoughtcrime.securesms.util.ProgressDialogAsyncTask;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
 import org.whispersystems.libaxolotl.util.guava.Optional;
 import org.whispersystems.textsecure.api.TextSecureAccountManager;
 import org.whispersystems.textsecure.api.push.exceptions.AuthorizationFailedException;
+import org.whispersystems.textsecure.internal.push.TextSecureProtos;
 
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 
 public class AdvancedPreferenceFragment extends PreferenceFragment {
   private static final String TAG = AdvancedPreferenceFragment.class.getSimpleName();
@@ -189,6 +201,45 @@ public class AdvancedPreferenceFragment extends PreferenceFragment {
           return NETWORK_ERROR;
         }
       }
+    }
+
+    //TODO: do the work in this method, then refactor
+    protected void handleLeaveAllPushGroups() {
+      Context context = getActivity();
+      ThreadDatabase threadDatabase = DatabaseFactory.getThreadDatabase(context);
+      GroupDatabase groupDatabase = DatabaseFactory.getGroupDatabase(context);
+      Reader allGroups = groupDatabase.getGroups();
+      GroupDatabase.GroupRecord groupRecord; // import GroupRecord?
+      Recipients groupMembers;
+      List<Long> threadIds= new LinkedList<Long>();
+      long threadId;
+
+      Log.w(TAG, "DEBUG: Leaving all push groups.");
+      while ((groupRecord = allGroups.getNext()) != null) {
+        // create a thread for each group if it does not exist
+        // iterate over each threadId, sending the "leave" message and leaving
+        byte[] groupId = groupRecord.getId();
+        groupMembers = groupDatabase.getGroupMembers(groupId, true); // not sure about boolean being passed
+        threadId = threadDatabase.getThreadIdFor(groupMembers);
+        threadIds.add(threadId);
+
+        Log.w(TAG, "threadId: " + threadId);
+
+
+        groupDatabase.setActive(groupId, false);
+
+        TextSecureProtos.GroupContext groupContext = TextSecureProtos.GroupContext.newBuilder()
+                .setId(ByteString.copyFrom(groupId))
+                .setType(TextSecureProtos.GroupContext.Type.QUIT)
+                .build();
+
+        OutgoingGroupMediaMessage outgoingMessage = new OutgoingGroupMediaMessage(context, groupMembers,
+                groupContext, null);
+        MessageSender.send(context, masterSecret, outgoingMessage, threadId, false);
+        groupDatabase.remove(groupId, TextSecurePreferences.getLocalNumber(context));
+
+      }
+
     }
 
     @Override
