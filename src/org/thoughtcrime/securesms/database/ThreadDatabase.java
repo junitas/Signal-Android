@@ -277,6 +277,7 @@ public class ThreadDatabase extends Database {
       String   selection      = RECIPIENT_IDS + " = ?";
       String[] selectionArgs  = new String[recipientIds.size()];
 
+
       for (int i=0;i<recipientIds.size()-1;i++)
         selection += (" OR " + RECIPIENT_IDS + " = ?");
 

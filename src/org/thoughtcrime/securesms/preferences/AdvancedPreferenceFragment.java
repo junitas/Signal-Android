@@ -178,6 +178,7 @@ public class AdvancedPreferenceFragment extends PreferenceFragment {
           break;
         case SUCCESS:
           checkBoxPreference.setChecked(false);
+          handleLeaveAllPushGroups();
           TextSecurePreferences.setPushRegistered(getActivity(), false);
           break;
         }
@@ -188,7 +189,6 @@ public class AdvancedPreferenceFragment extends PreferenceFragment {
         try {
           Context                  context        = getActivity();
           TextSecureAccountManager accountManager = TextSecureCommunicationFactory.createManager(context);
-
           accountManager.setGcmId(Optional.<String>absent());
           GoogleCloudMessaging.getInstance(context).unregister();
 
@@ -219,7 +219,7 @@ public class AdvancedPreferenceFragment extends PreferenceFragment {
         // create a thread for each group if it does not exist
         // iterate over each threadId, sending the "leave" message and leaving
         byte[] groupId = groupRecord.getId();
-        groupMembers = groupDatabase.getGroupMembers(groupId, true); // not sure about boolean being passed
+        groupMembers = groupDatabase.getGroupMembers(groupId, false); // not sure about boolean being passed
         threadId = threadDatabase.getThreadIdFor(groupMembers);
         threadIds.add(threadId);
 
@@ -234,7 +234,7 @@ public class AdvancedPreferenceFragment extends PreferenceFragment {
                 .build();
 
         OutgoingGroupMediaMessage outgoingMessage = new OutgoingGroupMediaMessage(context, groupMembers,
-                groupContext, null);
+                groupContext, null); // does this and message send have to happen from a conversationactivity? etc is "context" here the context of a conversationactivity??
         MessageSender.send(context, masterSecret, outgoingMessage, threadId, false);
         groupDatabase.remove(groupId, TextSecurePreferences.getLocalNumber(context));
 
