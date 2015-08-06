@@ -20,12 +20,14 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.res.TypedArray;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.os.Build;
 import android.support.annotation.NonNull;
 import android.text.TextUtils;
+import android.text.util.Linkify;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -239,6 +241,7 @@ public class ConversationItem extends LinearLayout {
   private void setBodyText(MessageRecord messageRecord) {
     bodyText.setClickable(false);
     bodyText.setFocusable(false);
+    handleResolveHyperlinks();
 
     if (isCaptionlessMms(messageRecord)) {
       bodyText.setVisibility(View.GONE);
@@ -325,9 +328,9 @@ public class ConversationItem extends LinearLayout {
 
   private void setEvents(MessageRecord messageRecord) {
     setClickable(batchSelected.isEmpty() &&
-                 (messageRecord.isFailed()                     ||
-                  messageRecord.isPendingInsecureSmsFallback() ||
-                  messageRecord.isBundleKeyExchange()));
+            (messageRecord.isFailed() ||
+                    messageRecord.isPendingInsecureSmsFallback() ||
+                    messageRecord.isBundleKeyExchange()));
     if (messageRecord.isFailed()) {
       setOnLongClickListener(new MultiSelectLongClickListener());
     }
@@ -344,7 +347,7 @@ public class ConversationItem extends LinearLayout {
 
   private void setNotificationMmsAttributes(NotificationMmsMessageRecord messageRecord) {
     String messageSize = String.format(context.getString(R.string.ConversationItem_message_size_d_kb),
-                                       messageRecord.getMessageSize());
+            messageRecord.getMessageSize());
     String expires     = String.format(context.getString(R.string.ConversationItem_expires_s),
                                        DateUtils.getRelativeTimeSpanString(getContext(),
                                                                            messageRecord.getExpiration(),
@@ -374,6 +377,30 @@ public class ConversationItem extends LinearLayout {
 
     contactPhoto.setAvatar(recipient, true);
     contactPhoto.setVisibility(View.VISIBLE);
+  }
+
+  private void handleResolveHyperlinks() {
+    PackageManager packageManager = context.getPackageManager();
+    String[] possibleIntentTypes = { Intent.ACTION_SENDTO, Intent.ACTION_VIEW, Intent.ACTION_DIAL, Intent.ACTION_VIEW };
+    String[] intentCategories = { Intent.CATEGORY_DEFAULT, Intent.CATEGORY_DEFAULT, Intent.CATEGORY_DEFAULT,Intent.CATEGORY_BROWSABLE };
+    int mask;
+    int masks[] = new int[4];
+    masks[0] = Linkify.EMAIL_ADDRESSES;
+    masks[1] = Linkify.MAP_ADDRESSES;
+    masks[2] = Linkify.PHONE_NUMBERS;
+    masks[3] = Linkify.WEB_URLS;
+    Log.w(TAG, "Intent types/categories that have an activity associated with them: ");
+    for (int i = 0; i < 4; i++) {
+      Intent intent = new Intent(possibleIntentTypes[i]);
+      //intent.removeCategory(Intent.CATEGORY_DEFAULT);
+     // intent.addCategory(intentCategories[i]);
+      List list = packageManager.queryIntentActivities(intent, 0);
+      if (list.size() > 0) {
+        Log.w(TAG, possibleIntentTypes[i] + "/" + intentCategories[i]);
+        mask = masks[i];
+        bodyText.setAutoLinkMask(mask);
+      }
+    }
   }
 
   /// Event handlers
